@@ -1,14 +1,15 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod _alloc;
+mod _box;
+mod _str;
+mod _string;
+
+pub use _alloc::*;
+pub use _box::*;
+pub use _str::*;
+pub use _string::*;
