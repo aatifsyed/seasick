@@ -21,8 +21,6 @@ use core::{
 /// Unlike [`&CStr`](CStr),
 /// an [`&SeaStr`](SeaStr) is a single pointer wide,
 /// allowing it to traverse FFI boundaries.
-#[doc(alias = "NullTerminated")]
-#[doc(alias = "NulTerminated")]
 #[repr(transparent)]
 pub struct SeaStr(
     // Use c_void so users don't get `improper_ctypes` lints.
@@ -108,7 +106,7 @@ impl SeaStr {
         unsafe { Self::from_ptr_mut(src.as_mut_ptr().cast::<c_char>()) }
     }
     /// If `self` is long enough,
-    /// nsert a `nul` such that the [`Self::len`] returns the given `len`
+    /// insert a `nul` such that the [`Self::len`] returns the given `len`
     pub fn trunate(&mut self, len: usize) {
         if let Some(dst) = self.get_mut(len + 1) {
             *dst = 0

@@ -239,3 +239,10 @@ impl<A: Allocator> From<&core::ffi::CStr> for SeaStringIn<A> {
         Self::new(value)
     }
 }
+
+#[cfg(feature = "alloc")]
+impl<A: Allocator> From<alloc::ffi::CString> for SeaStringIn<A> {
+    fn from(value: alloc::ffi::CString) -> Self {
+        Self::new(&value)
+    }
+}
