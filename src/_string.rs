@@ -5,7 +5,7 @@ use core::{
     fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    mem::MaybeUninit,
+    mem::{self, MaybeUninit},
     ops,
     ptr::{self, NonNull},
     slice,
@@ -43,6 +43,12 @@ impl<A: Allocator> SeaStringIn<A> {
             ptr: NonNull::new_unchecked(ptr.cast()),
             alloc: PhantomData,
         }
+    }
+    /// Does not drop self.
+    pub fn into_raw(self) -> *mut c_char {
+        let ptr = self.ptr.as_ptr().cast();
+        mem::forget(self);
+        ptr
     }
     /// Copy `src` into the heap.
     #[cfg(feature = "alloc")]
