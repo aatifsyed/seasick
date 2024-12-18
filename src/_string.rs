@@ -104,7 +104,7 @@ impl<A: Allocator> SeaStringIn<A> {
             Self::try_with_uninit(len, |it| {
                 let ptr = it.as_mut_ptr();
                 let len = it.len();
-                ptr::write_bytes(ptr, 0, len);
+                ptr::write_bytes(ptr, 1, len);
                 f(slice::from_raw_parts_mut(ptr.cast::<u8>(), len))
             })
         }
