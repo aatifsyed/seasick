@@ -30,6 +30,7 @@
 //! ```
 //!
 //! [`SeaBox`] is an additional owned pointer type, with a pluggable [`Allocator`].
+//! [`till_null`] contains iterators for nul-terminated arrays of pointers.
 //!
 //! [`&CStr`]: core::ffi::CStr
 //! [`&SeaStr`]: SeaStr
@@ -51,7 +52,7 @@ pub use _box::*;
 pub use _str::*;
 pub use _string::*;
 
-pub mod nul_terminated;
+pub mod till_null;
 
 /// Compile-time assertions of equality for arity, offset, size and alignment
 /// of struct members and function parameters.

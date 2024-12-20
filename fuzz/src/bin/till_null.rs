@@ -5,7 +5,7 @@ use std::{
     ptr::{self, NonNull},
 };
 
-use seasick::{nul_terminated, SeaStr};
+use seasick::{till_null, SeaStr};
 
 fn do_fuzz(inputs: Vec<CString>) {
     let ptrs = inputs
@@ -14,7 +14,7 @@ fn do_fuzz(inputs: Vec<CString>) {
         .chain([ptr::null()])
         .collect::<Vec<_>>();
     let it = NonNull::<[*const c_char]>::from(&*ptrs).cast::<*const SeaStr>();
-    let ours = unsafe { nul_terminated::Iter::new(it) }.collect::<Vec<_>>();
+    let ours = unsafe { till_null::Iter::new(it) }.collect::<Vec<_>>();
     assert_eq!(ours.len(), inputs.len());
     assert!(ours
         .iter()
