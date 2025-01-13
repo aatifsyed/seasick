@@ -75,6 +75,27 @@ impl From<AllocError> for std::io::ErrorKind {
 #[cfg(feature = "std")]
 impl From<AllocError> for std::io::Error {
     fn from(value: AllocError) -> Self {
-        std::io::Error::from(std::io::ErrorKind::from(value))
+        fn try_box<T>(x: T) -> Option<Box<T>> {
+            let layout = Layout::for_value(&x);
+            assert_ne!(layout.size(), 0);
+            // SAFETY:
+            // - checked size != 0 above
+            let ptr = unsafe { std::alloc::alloc(layout) };
+            match ptr.is_null() {
+                true => None,
+                // SAFETY:
+                // - this is called out as safe in the `Box` docs
+                false => Some(unsafe { Box::from_raw(ptr.cast()) }),
+            }
+        }
+
+        // try and preserve the source
+        match try_box(value) {
+            Some(src) => std::io::Error::new(
+                std::io::ErrorKind::OutOfMemory,
+                src as Box<dyn std::error::Error + Send + Sync>,
+            ),
+            None => std::io::Error::from(std::io::ErrorKind::from(value)),
+        }
     }
 }
