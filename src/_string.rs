@@ -1,4 +1,5 @@
 use core::{
+    alloc::Layout,
     borrow::{Borrow, BorrowMut},
     cmp,
     ffi::c_char,
@@ -125,14 +126,19 @@ impl<A: Allocator> SeaStringIn<A> {
         len: usize,
         f: impl FnOnce(&mut [MaybeUninit<u8>]),
     ) -> Result<Self, AllocError> {
-        let len_with_nul = len + 1;
-        let ptr = A::alloc_unaligned(len_with_nul)
-            .ok_or(AllocError(len_with_nul))?
-            .cast::<u8>();
-        unsafe { ptr.add(len).write(0) }; // terminate
-        let uninit =
-            unsafe { slice::from_raw_parts_mut(ptr.cast::<MaybeUninit<u8>>().as_ptr(), len) };
-        f(uninit);
+        let len_with_nul = len.checked_add(1).ok_or(AllocError(len))?;
+        let layout = Layout::array::<u8>(len_with_nul).map_err(|_| AllocError(len))?;
+        let Some(ptr) = A::alloc(layout) else {
+            return Err(AllocError(len_with_nul));
+        };
+        let Some((last, initme)) = unsafe {
+            slice::from_raw_parts_mut(ptr.cast::<MaybeUninit<u8>>().as_ptr(), len_with_nul)
+        }
+        .split_last_mut() else {
+            unreachable!("already incremented length, so slice is non-empty")
+        };
+        last.write(0);
+        f(initme);
         Ok(Self {
             ptr,
             alloc: PhantomData,

@@ -1,4 +1,5 @@
 use core::{
+    alloc::Layout,
     borrow::{Borrow, BorrowMut},
     cmp, fmt,
     hash::{Hash, Hasher},
@@ -48,15 +49,28 @@ impl<T, A: Allocator> SeaBoxIn<T, A> {
     }
     /// # Safety
     /// - Must initialize the given memory.
+    ///
+    /// Note that if `T` is a ZST, the passed in memory is ephemeral.
     pub unsafe fn try_emplace(f: impl FnOnce(&mut MaybeUninit<T>)) -> Result<Self, AllocError> {
-        let size = mem::size_of::<T>();
-        let mut ptr = A::alloc_aligned(size, mem::align_of::<T>())
-            .ok_or(AllocError(size))?
-            .cast::<MaybeUninit<T>>();
-        debug_assert!(ptr.is_aligned());
-        f(unsafe { ptr.as_mut() });
-        Ok(Self {
-            ptr: ptr.cast(),
+        Ok(SeaBoxIn {
+            ptr: match is_zst::<T>() {
+                true => {
+                    let mut u = MaybeUninit::uninit();
+                    f(&mut u);
+                    NonNull::from(&mut u).cast::<T>()
+                }
+                false => {
+                    let layout = Layout::new::<T>();
+                    match A::alloc(layout) {
+                        Some(ptr) => {
+                            let mut u = ptr.cast::<MaybeUninit<T>>();
+                            unsafe { f(u.as_mut()) };
+                            u.cast::<T>()
+                        }
+                        None => return Err(AllocError(layout.size())),
+                    }
+                }
+            },
             own: PhantomData,
             alloc: PhantomData,
         })
@@ -85,6 +99,10 @@ impl<T, A: Allocator> SeaBoxIn<T, A> {
     }
 }
 
+const fn is_zst<T>() -> bool {
+    mem::size_of::<T>() == 0
+}
+
 impl<T, A: Allocator> ops::Deref for SeaBoxIn<T, A> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -98,10 +116,10 @@ impl<T, A: Allocator> ops::DerefMut for SeaBoxIn<T, A> {
 }
 impl<T, A: Allocator> Drop for SeaBoxIn<T, A> {
     fn drop(&mut self) {
-        unsafe {
-            ptr::drop_in_place::<T>(&mut **self);
-            A::free(self.ptr.cast());
-        }
+        unsafe { ptr::drop_in_place::<T>(&mut **self) }
+        if !is_zst::<T>() {
+            unsafe { A::free(self.ptr.cast()) }
+        } // else we never called the allocator in the first place
     }
 }
 

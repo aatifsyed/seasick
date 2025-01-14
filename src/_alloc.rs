@@ -1,23 +1,24 @@
-use core::{alloc::Layout, fmt, ptr::NonNull};
+use core::{
+    alloc::Layout,
+    ffi::c_void,
+    fmt, mem,
+    ptr::{self, NonNull},
+};
 
 /// A set of free allocation functions.
 ///
 /// # Safety
 /// - Must act like an allocator ;)
 pub unsafe trait Allocator {
+    /// Whether an empty layout returns [`None`] or [`Some`] is implementation-dependent,
+    /// and users interested in this case should handle that before this call.
+    fn alloc(layout: Layout) -> Option<NonNull<u8>>;
     /// # Safety
-    /// - `size` must be less than [`isize::MAX`].
-    unsafe fn alloc_unaligned(size: usize) -> Option<NonNull<u8>>;
-    /// # Safety
-    /// - `size` must be less than [`isize::MAX`].
-    /// - `align` must be a power of two, and greater than `size_of::<c_void>()`.
-    unsafe fn alloc_aligned(size: usize, align: usize) -> Option<NonNull<u8>>;
-    /// # Safety
-    /// - `ptr` must have been from a call to [`Allocator::alloc_aligned`] or [`Allocator::alloc_unaligned`].
+    /// - `ptr` must have been from a call to [`Allocator::alloc`].
     unsafe fn free(ptr: NonNull<u8>);
 }
 
-/// Use [`libc`]'s allocation functions.
+/// An [`Allocator`] which uses [`libc`]'s allocation functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg(feature = "libc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "libc")))]
@@ -26,13 +27,19 @@ pub struct Libc;
 #[cfg(feature = "libc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "libc")))]
 unsafe impl Allocator for Libc {
-    unsafe fn alloc_unaligned(size: usize) -> Option<NonNull<u8>> {
-        NonNull::new(unsafe { libc::malloc(size).cast::<u8>() })
-    }
-    unsafe fn alloc_aligned(size: usize, align: usize) -> Option<NonNull<u8>> {
-        let mut ptr = core::ptr::null_mut();
-        unsafe { libc::posix_memalign(&mut ptr, align, size) };
-        NonNull::new(ptr.cast::<u8>())
+    fn alloc(layout: Layout) -> Option<NonNull<u8>> {
+        NonNull::new(
+            match layout.align() == 1 {
+                true => unsafe { libc::malloc(layout.size()) },
+                false => {
+                    let mut ptr = ptr::null_mut();
+                    let layout = layout.align_to(mem::size_of::<c_void>()).ok()?;
+                    unsafe { libc::posix_memalign(&mut ptr, layout.align(), layout.size()) };
+                    ptr
+                }
+            }
+            .cast::<u8>(),
+        )
     }
     unsafe fn free(ptr: NonNull<u8>) {
         unsafe { libc::free(ptr.as_ptr().cast()) }
