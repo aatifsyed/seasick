@@ -84,7 +84,7 @@ impl<T, A: Allocator> SeaBoxIn<T, A> {
     /// # Safety
     /// - Must have been allocated by `A`.
     /// - Must be a valid `T`.
-    /// - This must be the only pointer the allocation.
+    /// - This must be the only pointer to the allocation.
     pub unsafe fn from_raw(ptr: *mut T) -> Self {
         Self {
             ptr: NonNull::new_unchecked(ptr),

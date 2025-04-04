@@ -107,7 +107,7 @@ impl SeaStr {
     }
     /// If `self` is long enough,
     /// insert a `nul` such that the [`Self::len`] returns the given `len`
-    pub fn trunate(&mut self, len: usize) {
+    pub fn truncate(&mut self, len: usize) {
         if let Some(dst) = self.get_mut(len + 1) {
             *dst = 0
         }

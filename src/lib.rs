@@ -135,7 +135,35 @@ macro_rules! assert_abi {
             $crate::assert_abi!($($tt)*);
         )?
     };
+    (#[non_exhaustive] struct $left_ty:path = $right_ty:path {
+        $($left_field:ident = $right_field:ident),* $(,)?
+    } $(; $($tt:tt)*)?) => {
+        $crate::assert_abi! {
+            __struct $left_ty = $right_ty {
+                $($left_field = $right_field,)*
+            }
+        }
+        $(
+            $crate::assert_abi!($($tt)*);
+        )?
+    };
     (struct $left_ty:path = $right_ty:path {
+        $($left_field:ident = $right_field:ident),* $(,)?
+    } $(; $($tt:tt)*)?) => {
+        $crate::assert_abi! {
+            __struct $left_ty = $right_ty {
+                $($left_field = $right_field,)*
+            }
+        }
+        const _: () = {
+            fn exhaustive($left_ty { $($left_field: _),* }: $left_ty, $right_ty { $($right_field: _),* }: $right_ty) {}
+            //             ^^^^^^^ must be :path not :ty
+        };
+        $(
+            $crate::assert_abi!($($tt)*);
+        )?
+    };
+    (__struct $left_ty:path = $right_ty:path {
         $($left_field:ident = $right_field:ident),* $(,)?
     } $(; $($tt:tt)*)?) => {
         const _: () = {
@@ -171,14 +199,7 @@ macro_rules! assert_abi {
                     concat!("aligment mismatch between ", stringify!($left_field), " and ", stringify!($right_field))
                 };
             )*
-
-
-            fn exhaustive($left_ty { $($left_field: _),* }: $left_ty, $right_ty { $($right_field: _),* }: $right_ty) {}
-            //             ^^^^^^^ must be :path not :ty
         };
-        $(
-            $crate::assert_abi!($($tt)*);
-        )?
     };
     ($(;)?) => {}; // trailing semi
 }
