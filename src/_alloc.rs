@@ -1,9 +1,7 @@
-use core::{
-    alloc::Layout,
-    ffi::c_void,
-    fmt, mem,
-    ptr::{self, NonNull},
-};
+use core::{alloc::Layout, fmt, ptr::NonNull};
+
+#[cfg(feature = "libc")]
+use core::{ffi::c_void, mem, ptr};
 
 /// A set of free allocation functions.
 ///
@@ -82,7 +80,7 @@ impl From<AllocError> for std::io::ErrorKind {
 #[cfg(feature = "std")]
 impl From<AllocError> for std::io::Error {
     fn from(value: AllocError) -> Self {
-        fn try_box<T>(x: T) -> Option<Box<T>> {
+        fn try_box<T>(x: T) -> Option<std::boxed::Box<T>> {
             let layout = Layout::for_value(&x);
             assert_ne!(layout.size(), 0);
             // SAFETY:
@@ -92,7 +90,7 @@ impl From<AllocError> for std::io::Error {
                 true => None,
                 // SAFETY:
                 // - this is called out as safe in the `Box` docs
-                false => Some(unsafe { Box::from_raw(ptr.cast()) }),
+                false => Some(unsafe { std::boxed::Box::from_raw(ptr.cast()) }),
             }
         }
 
@@ -100,7 +98,7 @@ impl From<AllocError> for std::io::Error {
         match try_box(value) {
             Some(src) => std::io::Error::new(
                 std::io::ErrorKind::OutOfMemory,
-                src as Box<dyn std::error::Error + Send + Sync>,
+                src as std::boxed::Box<dyn std::error::Error + Send + Sync>,
             ),
             None => std::io::Error::from(std::io::ErrorKind::from(value)),
         }

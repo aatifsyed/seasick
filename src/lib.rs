@@ -36,8 +36,11 @@
 //! [`&SeaStr`]: SeaStr
 //! [`CString`]: alloc::ffi::CString
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+
+#[cfg(feature = "std")]
+extern crate std;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -53,6 +56,9 @@ pub use _str::*;
 pub use _string::*;
 
 pub mod till_null;
+
+#[cfg(feature = "macros")]
+pub use seasick_macros::AssertAbi;
 
 /// Compile-time assertions of equality for arity, offset, size and alignment
 /// of struct members and function parameters.
