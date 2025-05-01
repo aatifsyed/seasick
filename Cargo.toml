@@ -27,4 +27,4 @@ alloc = []
 libc = ["dep:libc"]
 
 [workspace]
-members = ["fuzz"]
+members = ["fuzz", "macros"]
