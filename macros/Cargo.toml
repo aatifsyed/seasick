@@ -4,3 +4,19 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+attrs = "0.2.7"
+proc-macro2 = { version = "1.0.95", default-features = false, features = [
+    "proc-macro",
+] }
+quote = { version = "1.0.40", default-features = false, features = [
+    "proc-macro",
+] }
+syn = { version = "2.0.101", default-features = false, features = [
+    "derive",
+    "parsing",
+    "printing",
+    "proc-macro",
+] }
+
+[lib]
+proc-macro = true

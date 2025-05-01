@@ -19,12 +19,14 @@ categories = [
 
 [dependencies]
 libc = { version = "0.2.166", default-features = false, optional = true }
+seasick-macros = { version = "0.1.0", path = "macros", optional = true }
 
 [features]
-default = ["std", "libc"]
+default = ["std", "libc", "macros"]
 std = ["alloc", "libc?/std"]
 alloc = []
 libc = ["dep:libc"]
+macros = ["dep:seasick-macros"]
 
 [workspace]
 members = ["fuzz", "macros"]
