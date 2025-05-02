@@ -58,7 +58,40 @@ pub use _string::*;
 pub mod till_null;
 
 #[cfg(feature = "macros")]
-pub use seasick_macros::AssertAbi;
+pub use seasick_macros::TransmuteFrom;
+
+pub trait TransmuteFrom<T: Sized>: Sized {
+    #[expect(clippy::missing_safety_doc)]
+    unsafe fn transmute_from(src: T) -> Self;
+}
+
+pub trait TransmuteRefFrom<T: ?Sized> {
+    #[expect(clippy::missing_safety_doc)]
+    unsafe fn transmute_ref(src: &T) -> &Self;
+}
+pub trait TransmuteMutFrom<T: ?Sized> {
+    #[expect(clippy::missing_safety_doc)]
+    unsafe fn transmute_mut(src: &mut T) -> &mut Self;
+}
+
+impl<T, U> TransmuteRefFrom<T> for U
+where
+    U: TransmuteFrom<T>,
+{
+    unsafe fn transmute_ref(src: &T) -> &Self {
+        let src = src as *const T as *const U;
+        unsafe { &*src }
+    }
+}
+impl<T, U> TransmuteMutFrom<T> for U
+where
+    U: TransmuteFrom<T>,
+{
+    unsafe fn transmute_mut(src: &mut T) -> &mut Self {
+        let src = src as *mut T as *mut U;
+        unsafe { &mut *src }
+    }
+}
 
 /// Compile-time assertions of equality for arity, offset, size and alignment
 /// of struct members and function parameters.
@@ -193,8 +226,8 @@ macro_rules! assert_abi {
                     concat!("mismatched offsets between ", stringify!($left_field), " and ", stringify!($right_field))
                 };
 
-                let left = field_layout(|it: &$left_ty| &it.$left_field);
-                let right = field_layout(|it: &$right_ty| &it.$right_field);
+                let left = layout_of_field(|it: &$left_ty| &it.$left_field);
+                let right = layout_of_field(|it: &$right_ty| &it.$right_field);
 
                 assert! {
                     left.size() == right.size(),
@@ -212,6 +245,13 @@ macro_rules! assert_abi {
 
 #[doc(hidden)]
 pub mod __private {
+
+    pub use core;
+
+    pub const fn layout_of_field<T, U>(_: fn(&T) -> &U) -> Layout {
+        Layout::new::<U>()
+    }
+
     pub use ::core::{alloc::Layout, assert, concat, mem::offset_of, stringify};
 
     pub trait AbiEq<T> {
@@ -257,10 +297,6 @@ pub mod __private {
         let left = Layout::new::<L>();
         let right = Layout::new::<R>();
         left.size() == right.size() && left.align() == right.align()
-    }
-
-    pub const fn field_layout<T, U>(_: fn(&U) -> &T) -> Layout {
-        Layout::new::<T>()
     }
 
     pub const fn abi_eq<L, R>(_: L, _: R) -> bool
