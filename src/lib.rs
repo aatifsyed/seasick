@@ -53,12 +53,16 @@ mod _array;
 mod _box;
 mod _str;
 mod _string;
+#[cfg(feature = "alloc")]
+mod _write_buffer;
 
 pub use _alloc::*;
 pub use _array::*;
 pub use _box::*;
 pub use _str::*;
 pub use _string::*;
+#[cfg(feature = "alloc")]
+pub use _write_buffer::*;
 
 pub mod till_null;
 
