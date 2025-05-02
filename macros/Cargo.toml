@@ -2,6 +2,12 @@
 name = "seasick-macros"
 version = "0.1.0"
 edition = "2024"
+authors = ["Aatif Syed <0xaatif@gmail.com>"]
+homepage = "https://crates.io/crates/seasick"
+documentation = "https://docs.rs/seasick"
+repository = "https://github.com/aatifsyed/seasick"
+license = "Apache-2.0 OR MIT"
+description = "FFI-safe nul-terminated strings with ownership semantics"
 
 [dependencies]
 attrs = "0.2.7"
