@@ -11,7 +11,7 @@ extern "C" {
 ```
 [`&SeaStr`] and [`SeaString`] are FFI-safe equivalents.
 ```rust
-extern "C" {
+unsafe extern "C" {
     fn concat(_: &SeaStr, _: &SeaStr) -> SeaString;
 }
 ```
