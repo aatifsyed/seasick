@@ -29,8 +29,11 @@
 //! assert_eq!(size_of::<Option<SeaString>>(), size_of::<*mut c_char>());
 //! ```
 //!
+//! [`SeaArray`] wraps a `[c_char; N]` array, providing [`SeaStr`]-like capabilities.
 //! [`SeaBox`] is an additional owned pointer type, with a pluggable [`Allocator`].
 //! [`till_null`] contains iterators for nul-terminated arrays of pointers.
+//! [`TransmuteFrom`] is a powerful trait and derive macro for writing wrappers
+//! to C types.
 //!
 //! [`&CStr`]: core::ffi::CStr
 //! [`&SeaStr`]: SeaStr
