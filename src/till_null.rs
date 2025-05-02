@@ -17,10 +17,10 @@
 //! # use std::ffi::*;
 //! mod bindings {
 //!     # use std::ffi::*;
-//!     extern "C" { pub fn count(arr: *mut *mut c_char) -> c_uint; }
+//!     unsafe extern "C" { pub fn count(arr: *mut *mut c_char) -> c_uint; }
 //! }
 //!
-//! #[no_mangle]
+//! #[unsafe(no_mangle)]
 //! extern "C" fn count(arr: Option<till_null::Iter<SeaStr>>) -> c_uint {
 //!     arr.unwrap_or_default().count() as _
 //! }

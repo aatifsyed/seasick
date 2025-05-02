@@ -12,7 +12,7 @@
 //! ```rust
 //! # use seasick::{SeaStr, SeaString};
 //! # #[deny(improper_ctypes)]
-//! extern "C" {
+//! unsafe extern "C" {
 //!     fn concat(_: &SeaStr, _: &SeaStr) -> SeaString;
 //! }
 //! ```
@@ -234,7 +234,7 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
 ///     back: &'a SeaStr,
 /// }
 ///
-/// #[no_mangle]
+/// #[unsafe(no_mangle)]
 /// # extern "C" fn concat(_: Args) -> Option<SeaString> { todo!() }
 /// # const _: &str = stringify! {
 /// extern "C" fn concat(args: Args) -> Option<SeaString> { .. }
@@ -253,7 +253,7 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
 ///         pub left: *const ::std::os::raw::c_char,
 ///         pub right: *const ::std::os::raw::c_char,
 ///     }
-///     extern "C" {
+///     unsafe extern "C" {
 ///         pub fn concat(arg1: args) -> *mut ::std::os::raw::c_char;
 ///     }
 /// }
