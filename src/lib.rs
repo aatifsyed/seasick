@@ -46,16 +46,41 @@ extern crate std;
 extern crate alloc;
 
 mod _alloc;
+mod _array;
 mod _box;
 mod _str;
 mod _string;
 
 pub use _alloc::*;
+pub use _array::*;
 pub use _box::*;
 pub use _str::*;
 pub use _string::*;
 
 pub mod till_null;
+
+use core::fmt::{self, Write as _};
+
+fn debug_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str("\"")?;
+    for chunk in bytes.utf8_chunks() {
+        f.write_fmt(format_args!("{}", chunk.valid().escape_default()))?;
+        if !chunk.invalid().is_empty() {
+            f.write_char(char::REPLACEMENT_CHARACTER)?
+        }
+    }
+    f.write_str("\"")
+}
+
+fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    for chunk in bytes.utf8_chunks() {
+        f.write_str(chunk.valid())?;
+        if !chunk.invalid().is_empty() {
+            f.write_char(char::REPLACEMENT_CHARACTER)?
+        }
+    }
+    Ok(())
+}
 
 /// For the given `struct`, check that for it, and each of its fields,
 /// the size and alignment matches some remote type,

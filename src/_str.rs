@@ -2,7 +2,7 @@ use core::{
     borrow::{Borrow, BorrowMut},
     cmp,
     ffi::{c_char, c_void, CStr},
-    fmt::{self, Write as _},
+    fmt,
     hash::{Hash, Hasher},
     ops, slice,
 };
@@ -116,28 +116,22 @@ impl SeaStr {
 
 impl fmt::Debug for SeaStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("\"")?;
-        for chunk in self.bytes().utf8_chunks() {
-            f.write_fmt(format_args!("{}", chunk.valid().escape_default()))?;
-            if !chunk.invalid().is_empty() {
-                f.write_char(char::REPLACEMENT_CHARACTER)?
-            }
-        }
-        f.write_str("\"")?;
-        Ok(())
+        crate::debug_bytes(self.bytes(), f)
     }
 }
+
 impl fmt::Display for SeaStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for chunk in self.bytes().utf8_chunks() {
-            f.write_str(chunk.valid())?;
-            if !chunk.invalid().is_empty() {
-                f.write_char(char::REPLACEMENT_CHARACTER)?
-            }
-        }
-        Ok(())
+        crate::display_bytes(self.bytes(), f)
     }
 }
+
+impl fmt::Pointer for SeaStr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_ptr().fmt(f)
+    }
+}
+
 impl PartialEq for SeaStr {
     fn eq(&self, other: &Self) -> bool {
         self.bytes() == other.bytes()

@@ -174,6 +174,13 @@ impl<A: Allocator> fmt::Display for SeaStringIn<A> {
         SeaStr::fmt(self, f)
     }
 }
+
+impl<A: Allocator> fmt::Pointer for SeaStringIn<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        SeaStr::fmt(self, f)
+    }
+}
+
 impl<A1: Allocator, A2: Allocator> PartialEq<SeaStringIn<A2>> for SeaStringIn<A1> {
     fn eq(&self, other: &SeaStringIn<A2>) -> bool {
         self.as_cstr() == other.as_cstr()
