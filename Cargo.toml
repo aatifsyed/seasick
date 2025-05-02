@@ -30,3 +30,7 @@ macros = ["dep:seasick-macros"]
 
 [workspace]
 members = ["fuzz", "macros"]
+
+[dev-dependencies]
+bindgen = "0.71.1"
+expect-test = "1.5.1"
