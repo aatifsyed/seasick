@@ -74,7 +74,7 @@ dependencies = [
 
 [[package]]
 name = "seasick"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "libc",
  "seasick-macros",
@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "seasick-fuzz"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "libfuzzer-sys",
  "seasick",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "seasick-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "attrs",
  "proc-macro2",
