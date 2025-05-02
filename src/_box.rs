@@ -85,14 +85,14 @@ impl<T, A: Allocator> SeaBoxIn<T, A> {
     /// - Must have been allocated by `A`.
     /// - Must be a valid `T`.
     /// - This must be the only pointer to the allocation.
-    pub unsafe fn from_raw(ptr: *mut T) -> Self {
+    pub const unsafe fn from_raw(ptr: *mut T) -> Self {
         Self {
-            ptr: NonNull::new_unchecked(ptr),
+            ptr: unsafe { NonNull::new_unchecked(ptr) },
             own: PhantomData,
             alloc: PhantomData,
         }
     }
-    pub fn into_raw(this: Self) -> *mut T {
+    pub const fn into_raw(this: Self) -> *mut T {
         let ptr = this.ptr.as_ptr();
         mem::forget(this);
         ptr

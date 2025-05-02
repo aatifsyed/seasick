@@ -1,7 +1,7 @@
 use core::{
     borrow::{Borrow, BorrowMut},
     cmp,
-    ffi::{c_char, c_void, CStr},
+    ffi::{CStr, c_char, c_void},
     fmt,
     hash::{Hash, Hasher},
     ops, slice,
@@ -35,7 +35,7 @@ impl SeaStr {
     /// - `ptr` must not be written to for the lifetime of self.
     /// - Invariants on [`SeaStr`] must be upheld.
     pub const unsafe fn from_ptr<'a>(ptr: *const c_char) -> &'a Self {
-        &*(ptr as *const SeaStr)
+        unsafe { &*(ptr as *const SeaStr) }
     }
     /// The returned pointer MUST NOT outlive self.
     pub const fn as_ptr(&self) -> *const c_char {
@@ -46,11 +46,11 @@ impl SeaStr {
     /// - `ptr` must be valid for reads and writes.
     /// - `ptr` must not be read from except through this reference for the lifetime of self.
     /// - Invariants on [`SeaStr`] must be upheld.
-    pub unsafe fn from_ptr_mut<'a>(ptr: *mut c_char) -> &'a mut Self {
-        &mut *(ptr as *mut SeaStr)
+    pub const unsafe fn from_ptr_mut<'a>(ptr: *mut c_char) -> &'a mut Self {
+        unsafe { &mut *(ptr as *mut SeaStr) }
     }
     /// The returned pointer MUST NOT outlive self.
-    pub fn as_ptr_mut(&mut self) -> *mut c_char {
+    pub const fn as_ptr_mut(&mut self) -> *mut c_char {
         self as *mut Self as _
     }
     /// `true` if the buffer starts with nul.
@@ -86,19 +86,19 @@ impl SeaStr {
     /// Access the raw bytes until (not including) the first nul.
     ///
     /// Writing a nul in this buffer will truncate it.
-    pub fn bytes_mut(&mut self) -> &mut [u8] {
+    pub const fn bytes_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.as_ptr_mut().cast::<u8>(), self.len()) }
     }
     /// Access the raw bytes including the first nul.
     ///
     /// # Safety
     /// - This buffer MUST contain a `nul`.
-    pub unsafe fn bytes_with_nul_mut(&mut self) -> &mut [u8] {
+    pub const unsafe fn bytes_with_nul_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.as_ptr_mut().cast::<u8>(), self.len_with_nul()) }
     }
     /// # Panics
     /// - if `src` is empty.
-    pub fn from_bytes_mut(src: &mut [u8]) -> &mut Self {
+    pub const fn from_bytes_mut(src: &mut [u8]) -> &mut Self {
         let Some(terminator) = src.last_mut() else {
             panic!("cannot add terminator to empty slice")
         };
@@ -107,10 +107,17 @@ impl SeaStr {
     }
     /// If `self` is long enough,
     /// insert a `nul` such that the [`Self::len`] returns the given `len`
-    pub fn truncate(&mut self, len: usize) {
-        if let Some(dst) = self.get_mut(len + 1) {
+    pub const fn truncate(&mut self, len: usize) {
+        if let Some(dst) = get_mut(self.bytes_mut(), len + 1) {
             *dst = 0
         }
+    }
+}
+
+const fn get_mut<T>(slc: &mut [T], ix: usize) -> Option<&mut T> {
+    match ix < slc.len() {
+        true => Some(&mut slc[ix]),
+        false => None,
     }
 }
 

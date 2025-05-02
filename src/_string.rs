@@ -12,7 +12,7 @@ use core::{
     slice,
 };
 
-use crate::{AllocError, SeaStr, _alloc::Allocator};
+use crate::{_alloc::Allocator, AllocError, SeaStr};
 
 /// Pointer-wide,
 /// owned handle to a `nul`-terminated buffer,
@@ -39,14 +39,14 @@ impl<A: Allocator> SeaStringIn<A> {
     /// # Safety
     /// - `ptr` must not be null.
     /// - Invariants on [`SeaString`] must be upheld.
-    pub unsafe fn from_ptr(ptr: *mut c_char) -> Self {
+    pub const unsafe fn from_ptr(ptr: *mut c_char) -> Self {
         Self {
-            ptr: NonNull::new_unchecked(ptr.cast()),
+            ptr: unsafe { NonNull::new_unchecked(ptr.cast()) },
             alloc: PhantomData,
         }
     }
     /// Does not drop self.
-    pub fn into_raw(self) -> *mut c_char {
+    pub const fn into_raw(self) -> *mut c_char {
         let ptr = self.ptr.as_ptr().cast();
         mem::forget(self);
         ptr

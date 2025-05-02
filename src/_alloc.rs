@@ -49,8 +49,11 @@ unsafe impl Allocator for Libc {
 pub struct AllocError(pub usize);
 
 impl AllocError {
-    pub fn into_layout(self) -> Layout {
-        Layout::array::<u8>(self.0).unwrap()
+    pub const fn into_layout(self) -> Layout {
+        match Layout::array::<u8>(self.0) {
+            Ok(it) => it,
+            Err(_) => panic!("bad AllocError"),
+        }
     }
     #[cfg(feature = "alloc")]
     #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]

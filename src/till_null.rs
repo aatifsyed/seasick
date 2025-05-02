@@ -49,26 +49,26 @@ use core::{fmt, marker::PhantomData, ptr::NonNull};
 ///
 /// See [module documentation](mod@self) for more.
 #[repr(transparent)]
-pub struct Iter<'a, T> {
+pub struct Iter<'a, T: ?Sized> {
     raw: Raw<T>,
     life: PhantomData<&'a T>,
 }
 
-impl<T> Iter<'_, T> {
+impl<T: ?Sized> Iter<'_, T> {
     /// # Safety
     /// - `base` must be valid for [reads](std::ptr::read) (aligned, initialized, etc).
     /// - `base` must point to a nul-terminated array of pointers,
     ///   as described in the [module documentation](mod@self).
     /// - Iterated objects must not be written to for the provided lifetime.
-    pub unsafe fn new(base: NonNull<*const T>) -> Self {
+    pub const unsafe fn new(base: NonNull<*const T>) -> Self {
         Self {
-            raw: Raw::new(base.cast()),
+            raw: unsafe { Raw::new(base.cast()) },
             life: PhantomData,
         }
     }
 }
 
-impl<T> Default for Iter<'_, T> {
+impl<T: ?Sized> Default for Iter<'_, T> {
     fn default() -> Self {
         Self {
             raw: Raw::default(),
@@ -77,7 +77,7 @@ impl<T> Default for Iter<'_, T> {
     }
 }
 
-impl<T> Clone for Iter<'_, T> {
+impl<T: ?Sized> Clone for Iter<'_, T> {
     fn clone(&self) -> Self {
         Self {
             raw: self.raw.clone(),
@@ -86,14 +86,14 @@ impl<T> Clone for Iter<'_, T> {
     }
 }
 
-impl<'a, T> Iterator for Iter<'a, T> {
+impl<'a, T: ?Sized> Iterator for Iter<'a, T> {
     type Item = &'a T;
     fn next(&mut self) -> Option<Self::Item> {
         Some(unsafe { self.raw.next()?.as_ref() })
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Iter<'_, T> {
+impl<T: ?Sized + fmt::Debug> fmt::Debug for Iter<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Iter")
             .field(&DebugList(self.clone()))
@@ -104,26 +104,26 @@ impl<T: fmt::Debug> fmt::Debug for Iter<'_, T> {
 ///
 /// See [module documentation](mod@self) for more.
 #[repr(transparent)]
-pub struct IterMut<'a, T> {
+pub struct IterMut<'a, T: ?Sized> {
     raw: Raw<T>,
     life: PhantomData<&'a mut T>,
 }
 
-impl<T> IterMut<'_, T> {
+impl<T: ?Sized> IterMut<'_, T> {
     /// # Safety
     /// - `base` must be valid for [reads](std::ptr::read) (aligned, initialized, etc).
     /// - `base` must point to a nul-terminated array of pointers,
     ///   as described in the [module documentation](mod@self).
     /// - Must have exclusive access to the iterated objects for the provided lifetime.
-    pub unsafe fn new(base: NonNull<*mut T>) -> Self {
+    pub const unsafe fn new(base: NonNull<*mut T>) -> Self {
         Self {
-            raw: Raw::new(base),
+            raw: unsafe { Raw::new(base) },
             life: PhantomData,
         }
     }
 }
 
-impl<T> Default for IterMut<'_, T> {
+impl<T: ?Sized> Default for IterMut<'_, T> {
     fn default() -> Self {
         Self {
             raw: Raw::default(),
@@ -132,14 +132,14 @@ impl<T> Default for IterMut<'_, T> {
     }
 }
 
-impl<'a, T> Iterator for IterMut<'a, T> {
+impl<'a, T: ?Sized> Iterator for IterMut<'a, T> {
     type Item = &'a mut T;
     fn next(&mut self) -> Option<Self::Item> {
         Some(unsafe { self.raw.next()?.as_mut() })
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for IterMut<'_, T> {
+impl<T: ?Sized + fmt::Debug> fmt::Debug for IterMut<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let rest = Iter {
             raw: self.raw.clone(),
@@ -149,7 +149,7 @@ impl<T: fmt::Debug> fmt::Debug for IterMut<'_, T> {
     }
 }
 
-impl<'a, T> From<IterMut<'a, T>> for Iter<'a, T> {
+impl<'a, T: ?Sized> From<IterMut<'a, T>> for Iter<'a, T> {
     fn from(value: IterMut<'a, T>) -> Self {
         let IterMut { raw, life: _ } = value;
         Self {
@@ -163,22 +163,21 @@ impl<'a, T> From<IterMut<'a, T>> for Iter<'a, T> {
 ///
 /// See [module documentation](mod@self) for more.
 #[repr(transparent)]
-pub struct Raw<T> {
+pub struct Raw<T: ?Sized> {
     ptr: NonNull<Option<NonNull<T>>>,
 }
 
-impl<T> Raw<T> {
+impl<T: ?Sized> Raw<T> {
     /// # Safety
     /// - `base` must be valid for [reads](std::ptr::read) (aligned, initialized, etc).
     /// - `base` must point to a nul-terminated array of pointers,
     ///   as described in the [module documentation](mod@self).
-    pub unsafe fn new(base: NonNull<*mut T>) -> Self {
-        assert!(base.is_aligned());
+    pub const unsafe fn new(base: NonNull<*mut T>) -> Self {
         Self { ptr: base.cast() }
     }
 }
 
-impl<T> Iterator for Raw<T> {
+impl<T: ?Sized> Iterator for Raw<T> {
     type Item = NonNull<T>;
     fn next(&mut self) -> Option<Self::Item> {
         let here = unsafe { self.ptr.read() }?;
@@ -187,13 +186,13 @@ impl<T> Iterator for Raw<T> {
     }
 }
 
-impl<T> Clone for Raw<T> {
+impl<T: ?Sized> Clone for Raw<T> {
     fn clone(&self) -> Self {
         Self { ptr: self.ptr }
     }
 }
 
-impl<T> Default for Raw<T> {
+impl<T: ?Sized> Default for Raw<T> {
     /// Empty by default.
     fn default() -> Self {
         trait Empty {
@@ -204,7 +203,7 @@ impl<T> Default for Raw<T> {
         unsafe { Raw::new(base.cast()) }
     }
 }
-impl<T> fmt::Debug for Raw<T> {
+impl<T: ?Sized> fmt::Debug for Raw<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Raw")
             .field(&DebugList(self.clone()))
@@ -212,19 +211,19 @@ impl<T> fmt::Debug for Raw<T> {
     }
 }
 
-impl<T> From<Iter<'_, T>> for Raw<T> {
+impl<T: ?Sized> From<Iter<'_, T>> for Raw<T> {
     fn from(value: Iter<T>) -> Self {
         value.raw
     }
 }
 
-impl<T> From<IterMut<'_, T>> for Raw<T> {
+impl<T: ?Sized> From<IterMut<'_, T>> for Raw<T> {
     fn from(value: IterMut<T>) -> Self {
         value.raw
     }
 }
 
-struct DebugList<T>(T);
+struct DebugList<T: ?Sized>(T);
 impl<T: Clone + IntoIterator> fmt::Debug for DebugList<T>
 where
     T::Item: fmt::Debug,
