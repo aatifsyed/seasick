@@ -136,12 +136,12 @@ fn expand_transmute_from(input: syn::DeriveInput) -> syn::Result<TokenStream> {
 
             const _: () = { #checks };
 
-            impl #impl_generics TransmuteFrom<#remote> for #local #ty_generics #where_clause {
+            unsafe impl #impl_generics TransmuteFrom<#remote> for #local #ty_generics #where_clause {
                 unsafe fn transmute_from(remote: #remote) -> Self {
                     unsafe { transmute::<#remote, #local>(remote) }
                 }
             }
-            impl #impl_generics TransmuteFrom<#local #ty_generics> for #remote #where_clause {
+            unsafe impl #impl_generics TransmuteFrom<#local #ty_generics> for #remote #where_clause {
                 unsafe fn transmute_from(local: #local) -> Self {
                     unsafe { transmute::<#local, #remote>(local) }
                 }
