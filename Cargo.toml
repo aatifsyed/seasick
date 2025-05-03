@@ -7,7 +7,7 @@ homepage = "https://crates.io/crates/seasick"
 documentation = "https://docs.rs/seasick"
 repository = "https://github.com/aatifsyed/seasick"
 license = "Apache-2.0 OR MIT"
-description = "FFI-safe nul-terminated strings with ownership semantics"
+description = "Tools for implementing and transcribing C APIs."
 keywords = ["ffi", "nul", "c_str", "transparent"]
 categories = [
     "rust-patterns",
