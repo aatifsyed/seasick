@@ -1,19 +1,17 @@
 <!-- cargo-rdme start -->
 
-FFI-safe types for writing and transcribing C APIs.
+Write and transcribe C APIs.
 
 [`&CStr`] and [`CString`] are not FFI safe.
+
 ```rust
-#[deny(improper_ctypes)]
-extern "C" {
-    fn concat(_: &CStr, _: &CStr) -> CString;
-}
+#![deny(improper_ctypes)]
+extern "C" fn concat(_: &CStr, _: &CStr) -> CString { todo!() }
 ```
 [`&SeaStr`] and [`SeaString`] are FFI-safe equivalents.
 ```rust
-unsafe extern "C" {
-    fn concat(_: &SeaStr, _: &SeaStr) -> SeaString;
-}
+#[deny(improper_ctypes)]
+extern "C" fn concat(_: &SeaStr, _: &SeaStr) -> SeaString { todo!() }
 ```
 They use the non-null niche which is filled by [`Option::None`].
 ```c

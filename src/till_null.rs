@@ -14,19 +14,20 @@
 //!
 //! ```
 //! # use seasick::*;
-//! # use std::ffi::*;
-//! mod bindings {
-//!     # use std::ffi::*;
+//! # use core::ffi::*;
+//! mod sys {
+//!     # use core::ffi::*;
 //!     unsafe extern "C" { pub fn count(arr: *mut *mut c_char) -> c_uint; }
 //! }
 //!
-//! #[unsafe(no_mangle)]
 //! extern "C" fn count(arr: Option<till_null::Iter<SeaStr>>) -> c_uint {
 //!     arr.unwrap_or_default().count() as _
 //! }
 //!
-//! assert_abi! { fn count = bindings::count as unsafe extern "C" fn(_) -> _ }
-//!
+//! assert_abi! {
+//!     sys::count as unsafe extern "C" fn(*mut *mut c_char) -> c_uint
+//!     == count as extern "C" fn(Option<till_null::Iter<SeaStr>>) -> _;
+//! }
 //! ```
 //!
 //! Note that the niche optimization for [`Option`] is guaranteed,

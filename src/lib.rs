@@ -1,31 +1,28 @@
-//! FFI-safe types for writing and transcribing C APIs.
+//! Write and transcribe C APIs.
 //!
 //! [`&CStr`] and [`CString`] are not FFI safe.
+//!
 //! ```compile_fail
 //! # use std::ffi::{CStr, CString};
-//! #[deny(improper_ctypes)]
-//! extern "C" {
-//!     fn concat(_: &CStr, _: &CStr) -> CString;
-//! }
+//! #![deny(improper_ctypes)]
+//! extern "C" fn concat(_: &CStr, _: &CStr) -> CString { todo!() }
 //! ```
 //! [`&SeaStr`] and [`SeaString`] are FFI-safe equivalents.
 //! ```rust
-//! # use seasick::{SeaStr, SeaString};
-//! # #[deny(improper_ctypes)]
-//! unsafe extern "C" {
-//!     fn concat(_: &SeaStr, _: &SeaStr) -> SeaString;
-//! }
+//! # use seasick::*;
+//! #[deny(improper_ctypes)]
+//! extern "C" fn concat(_: &SeaStr, _: &SeaStr) -> SeaString { todo!() }
 //! ```
 //! They use the non-null niche which is filled by [`Option::None`].
 //! ```c
 //! /** may return null */
 //! char *foo(void);
 //! ```
-//! ```rust
+//! ```
 //! # stringify! {
 //! extern "C" fn foo() -> Option<SeaString> { .. }
 //! # };
-//! # use std::{ffi::c_char, mem::size_of}; use seasick::SeaString;
+//! # use {std::{ffi::c_char, mem::size_of}, seasick::SeaString};
 //! assert_eq!(size_of::<Option<SeaString>>(), size_of::<*mut c_char>());
 //! ```
 //!
@@ -105,21 +102,22 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// Given this `C` file:
 ///
 /// ```c
-#[doc = include_str!("_doc/header.h")]
+#[doc = include_str!("_doc/transmute_from/header.h")]
 /// ```
 ///
 /// [`bindgen`](https://docs.rs/bindgen) can generate the following Rust code:
 ///
 /// ```
-#[doc = include_str!("_doc/bindgen.rs")]
+#[doc = include_str!("_doc/transmute_from/bindgen.rs")]
 /// ```
 ///
 /// We can then write a reinterpretation of that struct:
 ///
 /// ```
+/// # #![cfg(all(feature = "macros", feature = "libc"))]
 /// # use core::{ffi::*, marker::PhantomData};
 /// # use seasick::*;
-/// # #[path = "_doc/bindgen.rs"] mod sys;
+/// # #[path = "_doc/transmute_from/bindgen.rs"] mod sys;
 /// #[repr(C)]
 /// #[derive(TransmuteFrom)]
 /// #[transmute(from(sys::yak_shaver))]
@@ -148,9 +146,10 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// all cause a compilation failure:
 ///
 /// ```compile_fail
+/// # #![cfg(all(feature = "macros"))]
 /// # use core::{ffi::*, marker::PhantomData};
 /// # use seasick::*;
-/// # #[path = "_doc/bindgen.rs"] mod sys;
+/// # #[path = "_doc/transmute_from/bindgen.rs"] mod sys;
 /// #[repr(C)]
 /// #[derive(TransmuteFrom)]
 /// #[transmute(from(sys::yak_shaver))]
@@ -169,7 +168,7 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// ```
 /// # use core::{ffi::*, marker::PhantomData};
 /// # use seasick::*;
-/// # #[path = "_doc/bindgen.rs"] mod sys;
+/// # #[path = "_doc/transmute_from/bindgen.rs"] mod sys;
 /// #[repr(C)]
 /// #[derive(TransmuteFrom)]
 /// #[transmute(from(sys::yak_shaver), strict)]
@@ -197,29 +196,13 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 ///     phantom: PhantomData<()>,
 /// }
 /// ```
+///
+/// <div class="warning">
+/// This macro can only check the size, alignment and offsets of types.
+/// It is still up to you to ensure that usage is sound.
+/// </div>
 #[cfg(feature = "macros")]
 pub use seasick_macros::TransmuteFrom;
-
-#[cfg(feature = "std")]
-#[test]
-fn _doc() {
-    let mut v = std::vec::Vec::new();
-    bindgen::builder()
-        .header_contents("bind.h", include_str!("_doc/header.h"))
-        .use_core()
-        .layout_tests(false)
-        .derive_copy(false)
-        .derive_debug(false)
-        .generate_comments(false)
-        .allowlist_type("yak_shaver")
-        .allowlist_type("clothes")
-        .generate()
-        .unwrap()
-        .write(std::boxed::Box::new(&mut v))
-        .unwrap();
-    let s = std::string::String::from_utf8(v).unwrap();
-    expect_test::expect_file!["_doc/bindgen.rs"].assert_eq(&s);
-}
 
 /// Transmute between two types that have the same ABI.
 ///
@@ -267,158 +250,71 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
     unsafe fn transmute_mut(src: &mut T) -> &mut Self;
 }
 
-/// Compile-time assertions of equality for arity, offset, size and alignment
-/// of struct members and function parameters.
+/// Assert that the ABI of two functions are compatible.
 ///
-/// Suppose you are implementing a C header file:
+/// Compile-time assert that the parameters and return types of the given
+/// functions have the same [size](core::mem::size_of) and [alignment](core::mem::align_of).
+///
+/// # Worked example
+///
+/// ## `C` Source
+///
 /// ```c
-/// struct args
-/// {
-///     const char *left;
-///     const char *right;
-/// };
-/// char *concat(struct args);
+#[doc = include_str!("_doc/assert_abi/header.h")]
 /// ```
 ///
-/// You could use [`bindgen`](https://docs.rs/bindgen) to create simple bindings,
-/// and then write nice rust APIs separately,
-/// asserting that the two are ABI compatible:
+/// ## [`bindgen`](https://docs.rs/bindgen) output.
+///
+/// ```rust
+#[doc = include_str!("_doc/assert_abi/bindgen.rs")]
+/// ```
+///
+/// ## User code
 ///
 /// ```
-/// use seasick::{SeaStr, SeaString, assert_abi};
-///
-/// struct Args<'a> {
-///     front: &'a SeaStr,
-///     back: &'a SeaStr,
-/// }
-///
-/// #[unsafe(no_mangle)]
-/// # extern "C" fn concat(_: Args) -> Option<SeaString> { todo!() }
-/// # const _: &str = stringify! {
-/// extern "C" fn concat(args: Args) -> Option<SeaString> { .. }
-/// # };
+/// # #![cfg(all(feature = "macros", feature = "libc"))]
+/// # use seasick::*;
+/// # use core::ffi::c_char;
+/// # #[path = "_doc/assert_abi/bindgen.rs"] mod sys;
+/// extern "C" fn concat(_: &SeaStr, _: &SeaStr) -> Option<SeaString> { todo!() }
 ///
 /// assert_abi! {
-///     struct Args = bindings::args { front = left, back = right };
-///     fn concat = bindings::concat as unsafe extern "C" fn (_) -> _;
-/// }
-///
-/// mod bindings {
-///     /* automatically generated by rust-bindgen */
-///     #[repr(C)]
-///     #[derive(Debug, Copy, Clone)]
-///     pub struct args {
-///         pub left: *const ::std::os::raw::c_char,
-///         pub right: *const ::std::os::raw::c_char,
-///     }
-///     unsafe extern "C" {
-///         pub fn concat(arg1: args) -> *mut ::std::os::raw::c_char;
-///     }
+///     sys::concat as unsafe extern "C" fn(*const c_char, *const c_char) -> *mut c_char
+///     == concat as extern "C" fn(&SeaStr, &SeaStr) -> Option<SeaString>
 /// }
 /// ```
 ///
-/// Compilation will fail if the ABI drifts out of sync.
+/// If the abi is mismatched, you will get a compile error:
 ///
 /// ```compile_fail
-/// # use bindings::Args;
-/// # #[expect(improper_ctypes_definitions)]
-/// extern "C" fn concat(args: Args) -> String { String::new() }
-///                                  // ^^^^^^ different size and alignment
+/// # #![cfg(all(feature = "macros"))]
+/// # extern crate alloc;
+/// # use seasick::*;
+/// # use core::ffi::c_char;
+/// # use alloc::vec::Vec;
+/// # #[path = "_doc/assert_abi/bindgen.rs"] mod sys;
+/// extern "C" fn concat(_: &SeaStr, _: &SeaStr) -> Vec<u8> { todo!() }
+///
 /// assert_abi! {
-///     fn concat = bindings::concat as unsafe extern "C" fn(_) -> _;
+///     sys::concat as unsafe extern "C" fn(*const c_char, *const c_char) -> *mut c_char
+///     == concat as extern "C" fn(&SeaStr, &SeaStr) -> Vec<u8>;
 /// }
-/// # mod bindings { #[repr(C)] pub struct Args(()); extern "C" { pub fn concat(args: Args) -> *mut ::std::os::raw::c_char; } }
 /// ```
-///
-/// <div class="warning">
-///
-/// This macro only detects ABI changes (e.g size, alignment), and cannot distinguish
-/// e.g `Box` from `SeaString` - it is still up to you to write (or generate) your type mappings appropriately.
-///
-/// </div>
 #[macro_export]
+#[cfg(feature = "macros")]
+#[cfg_attr(docsrs, doc_cfg(feature = "macros"))]
 macro_rules! assert_abi {
-    (fn $left:path = $right:path as $ty:ty $(; $($tt:tt)*)?) => {
-        const _: () = {
-            let _ = $left as $ty;
-            let _ = $right as $ty;
-            $crate::__private::assert!($crate::__private::abi_eq($left as $ty, $right as $ty));
-        };
-        $(
-            $crate::assert_abi!($($tt)*);
-        )?
-    };
-    (#[non_exhaustive] struct $left_ty:path = $right_ty:path {
-        $($left_field:ident = $right_field:ident),* $(,)?
-    } $(; $($tt:tt)*)?) => {
-        $crate::assert_abi! {
-            __struct $left_ty = $right_ty {
-                $($left_field = $right_field,)*
-            }
+    ($($tt:tt)*) => {
+        $crate::__private::assert_abi! {
+            crate = $crate;
+            $($tt)*
         }
-        $(
-            $crate::assert_abi!($($tt)*);
-        )?
     };
-    (struct $left_ty:path = $right_ty:path {
-        $($left_field:ident = $right_field:ident),* $(,)?
-    } $(; $($tt:tt)*)?) => {
-        $crate::assert_abi! {
-            __struct $left_ty = $right_ty {
-                $($left_field = $right_field,)*
-            }
-        }
-        const _: () = {
-            fn exhaustive($left_ty { $($left_field: _),* }: $left_ty, $right_ty { $($right_field: _),* }: $right_ty) {}
-            //             ^^^^^^^ must be :path not :ty
-        };
-        $(
-            $crate::assert_abi!($($tt)*);
-        )?
-    };
-    (__struct $left_ty:path = $right_ty:path {
-        $($left_field:ident = $right_field:ident),* $(,)?
-    } $(; $($tt:tt)*)?) => {
-        const _: () = {
-            use $crate::__private::*;
-
-            let left = Layout::new::<$left_ty>();
-            let right = Layout::new::<$right_ty>();
-
-            assert! {
-                left.size() == right.size(),
-                concat!("size mismatch between ", stringify!($left_ty), " and ", stringify!($right_ty))
-            };
-            assert! {
-                left.align() == right.align(),
-                concat!("aligment mismatch between ", stringify!($left_ty), " and ", stringify!($right_ty))
-            };
-
-            $(
-                assert! {
-                    offset_of!($left_ty, $left_field) == offset_of!($right_ty, $right_field),
-                    concat!("mismatched offsets between ", stringify!($left_field), " and ", stringify!($right_field))
-                };
-
-                let left = layout_of_field(|it: &$left_ty| &it.$left_field);
-                let right = layout_of_field(|it: &$right_ty| &it.$right_field);
-
-                assert! {
-                    left.size() == right.size(),
-                    concat!("size mismatch between ", stringify!($left_field), " and ", stringify!($right_field))
-                };
-                assert! {
-                    left.align() == right.align(),
-                    concat!("aligment mismatch between ", stringify!($left_field), " and ", stringify!($right_field))
-                };
-            )*
-        };
-    };
-    ($(;)?) => {}; // trailing semi
 }
 
 #[doc(hidden)]
 pub mod __private {
+    use core::alloc::Layout;
 
     pub use core;
 
@@ -426,59 +322,46 @@ pub mod __private {
         Layout::new::<U>()
     }
 
-    pub use ::core::{alloc::Layout, assert, concat, mem::offset_of, stringify};
+    #[cfg(feature = "macros")]
+    pub use seasick_macros::assert_abi;
+}
 
-    pub trait AbiEq<T> {
-        const ABI_EQ: bool;
+#[cfg(all(test, feature = "std"))]
+mod doc {
+    use super::*;
+
+    #[test]
+    fn transmute_from() {
+        let mut v = std::vec::Vec::new();
+        bindgen::builder()
+            .header_contents("header.h", include_str!("_doc/transmute_from/header.h"))
+            .use_core()
+            .layout_tests(false)
+            .derive_copy(false)
+            .derive_debug(false)
+            .generate_comments(false)
+            .allowlist_type("yak_shaver")
+            .allowlist_type("clothes")
+            .generate()
+            .unwrap()
+            .write(std::boxed::Box::new(&mut v))
+            .unwrap();
+        let s = std::string::String::from_utf8(v).unwrap();
+        expect_test::expect_file!["_doc/transmute_from/bindgen.rs"].assert_eq(&s);
     }
 
-    macro_rules! define {
-        ($($l:ident $r:ident)*) => {
-            impl<LR, RR, $($l, $r),*> AbiEq<fn($($l),*) -> LR> for fn($($r),*) -> RR {
-                const ABI_EQ: bool = layout_eq::<LR, RR>() $(&& layout_eq::<$l, $r>())*;
-            }
-            impl<LR, RR, $($l, $r),*> AbiEq<unsafe fn($($l),*) -> LR> for unsafe fn($($r),*) -> RR {
-                const ABI_EQ: bool = layout_eq::<LR, RR>() $(&& layout_eq::<$l, $r>())*;
-            }
-            impl<LR, RR, $($l, $r),*> AbiEq<extern "C" fn($($l),*) -> LR> for extern "C" fn($($r),*) -> RR {
-                const ABI_EQ: bool = layout_eq::<LR, RR>() $(&& layout_eq::<$l, $r>())*;
-            }
-            impl<LR, RR, $($l, $r),*> AbiEq<unsafe extern "C" fn($($l),*) -> LR> for unsafe extern "C" fn($($r),*) -> RR {
-                const ABI_EQ: bool = layout_eq::<LR, RR>() $(&& layout_eq::<$l, $r>())*;
-            }
-        };
-    }
-
-    define!();
-    define!(L0 R0);
-    define!(L0 R0 L1 R1);
-    define!(L0 R0 L1 R1 L2 R2);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8 L9 R9);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8 L9 R9 L10 R10);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8 L9 R9 L10 R10 L11 R11);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8 L9 R9 L10 R10 L11 R11 L12 R12);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8 L9 R9 L10 R10 L11 R11 L12 R12 L13 R13);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8 L9 R9 L10 R10 L11 R11 L12 R12 L13 R13 L14 R14);
-    define!(L0 R0 L1 R1 L2 R2 L3 R3 L4 R4 L5 R5 L6 R6 L7 R7 L8 R8 L9 R9 L10 R10 L11 R11 L12 R12 L13 R13 L14 R14 L15 R15);
-
-    const fn layout_eq<L, R>() -> bool {
-        let left = Layout::new::<L>();
-        let right = Layout::new::<R>();
-        left.size() == right.size() && left.align() == right.align()
-    }
-
-    pub const fn abi_eq<L, R>(_: L, _: R) -> bool
-    where
-        L: AbiEq<R>,
-        L: Copy,
-        R: Copy,
-    {
-        L::ABI_EQ
+    #[test]
+    fn abi_eq() {
+        let mut v = std::vec::Vec::new();
+        bindgen::builder()
+            .header_contents("header.h", include_str!("_doc/assert_abi/header.h"))
+            .use_core()
+            .generate_comments(false)
+            .generate()
+            .unwrap()
+            .write(std::boxed::Box::new(&mut v))
+            .unwrap();
+        let s = std::string::String::from_utf8(v).unwrap();
+        expect_test::expect_file!["_doc/assert_abi/bindgen.rs"].assert_eq(&s);
     }
 }
