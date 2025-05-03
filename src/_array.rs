@@ -4,10 +4,11 @@ use core::{
     ffi::{CStr, c_char},
     fmt,
     hash::{Hash, Hasher},
-    mem, ops, slice,
+    ops, slice,
 };
 
 /// A fixed-sized array that may be truncated by an interior null.
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct SeaArray<const N: usize>(pub [c_char; N]);
 
@@ -34,17 +35,19 @@ impl<const N: usize> SeaArray<N> {
     }
     /// Return up to the nul-terminator, or the entire contents.
     pub const fn bytes_mut(&mut self) -> &mut [u8] {
+        let ptr = self.all_bytes_mut().as_mut_ptr();
         let len = self.bytes().len();
-        let chars: &mut [c_char] = &mut self.0;
-        unsafe { slice::from_raw_parts_mut(chars.as_mut_ptr().cast::<u8>(), len) }
+        unsafe { slice::from_raw_parts_mut(ptr, len) }
     }
     /// Return the entire inner array, as bytes.
     pub const fn all_bytes(&self) -> &[u8; N] {
-        unsafe { mem::transmute_copy(&self.0) }
+        let ptr = self as *const Self as *const [u8; N];
+        unsafe { &*ptr }
     }
     /// Return the entire inner array, as bytes.
     pub const fn all_bytes_mut(&mut self) -> &mut [u8; N] {
-        unsafe { mem::transmute(&mut self.0) }
+        let ptr = self as *mut Self as *mut [u8; N];
+        unsafe { &mut *ptr }
     }
 }
 
@@ -99,5 +102,22 @@ impl<const N: usize> ops::Deref for SeaArray<N> {
 impl<const N: usize> ops::DerefMut for SeaArray<N> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.bytes_mut()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test() {
+        let mut arr = SeaArray([0; 64]);
+        assert_eq!(arr.len(), 0);
+
+        let Some(prefix) = arr.all_bytes_mut().first_chunk_mut() else {
+            unreachable!()
+        };
+        *prefix = *b"hello";
+
+        assert_eq!(&*arr, b"hello");
     }
 }
