@@ -103,6 +103,9 @@ const fn is_zst<T>() -> bool {
     mem::size_of::<T>() == 0
 }
 
+unsafe impl<T: Send, A: Allocator + Send> Send for SeaBoxIn<T, A> {}
+unsafe impl<T: Sync, A: Allocator + Sync> Sync for SeaBoxIn<T, A> {}
+
 impl<T, A: Allocator> ops::Deref for SeaBoxIn<T, A> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
