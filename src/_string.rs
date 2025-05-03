@@ -266,3 +266,5 @@ impl<A: Allocator> From<alloc::ffi::CString> for SeaStringIn<A> {
         Self::new(&value)
     }
 }
+
+unsafe impl<A: Allocator + Send> Send for SeaStringIn<A> {}
