@@ -1,40 +1,43 @@
-//! Write and transcribe C APIs.
+//! Tools for implementing and transcribing C APIs.
 //!
-//! [`&CStr`] and [`CString`] are not FFI safe.
+//! [`&CStr`], [`CString`] and [`Box`] are not FFI safe.
 //!
 //! ```compile_fail
 //! # use std::ffi::{CStr, CString};
-//! #![deny(improper_ctypes)]
-//! extern "C" fn concat(_: &CStr, _: &CStr) -> CString { todo!() }
-//! ```
-//! [`&SeaStr`] and [`SeaString`] are FFI-safe equivalents.
-//! ```rust
-//! # use seasick::*;
-//! #[deny(improper_ctypes)]
-//! extern "C" fn concat(_: &SeaStr, _: &SeaStr) -> SeaString { todo!() }
-//! ```
-//! They use the non-null niche which is filled by [`Option::None`].
-//! ```c
-//! /** may return null */
-//! char *foo(void);
-//! ```
-//! ```
-//! # stringify! {
-//! extern "C" fn foo() -> Option<SeaString> { .. }
-//! # };
-//! # use {std::{ffi::c_char, mem::size_of}, seasick::SeaString};
-//! assert_eq!(size_of::<Option<SeaString>>(), size_of::<*mut c_char>());
+//! #[deny(improper_ctypes_definitions)]
+//! extern "C" fn bad(_: &CStr, _: Box<u8>) -> CString { todo!() }
 //! ```
 //!
-//! [`SeaArray`] wraps a `[c_char; N]` array, providing [`SeaStr`]-like capabilities.
-//! [`SeaBox`] is an additional owned pointer type, with a pluggable [`Allocator`].
-//! [`till_null`] contains iterators for nul-terminated arrays of pointers.
-//! [`TransmuteFrom`] is a powerful trait and derive macro for writing wrappers
-//! to C types.
+//! [`&SeaStr`], [`SeaString`] and [`SeaBox`] are FFI-safe equivalents.
+//!
+//! ```rust
+//! # use seasick::*;
+//! #[deny(improper_ctypes_definitions)]
+//! extern "C" fn good(_: &SeaStr, _: SeaBox<u8>) -> SeaString { todo!() }
+//! ```
+//!
+//! <details><summary>
+//!
+//! All are pointer-wide, with a non-null niche filled by [`Option::None`].
+//! </summary>
+//!
+//! ```
+//! # use {std::{ffi::c_char, mem::size_of}, seasick::*};
+//! assert_eq!(size_of::<SeaBox<u8>>(),         size_of::<*mut u8>());
+//! assert_eq!(size_of::<Option<SeaBox<u8>>>(), size_of::<*mut u8>());
+//! assert_eq!(size_of::<SeaString>(),          size_of::<*mut c_char>());
+//! assert_eq!(size_of::<Option<SeaString>>(),  size_of::<*mut c_char>());
+//! ```
+//! </details>
+//!
+//! [`trait@TransmuteFrom`] is the culmination of this crate,
+//! for writing your own wrappers to C types.
+//! See its documentation for more.
 //!
 //! [`&CStr`]: core::ffi::CStr
 //! [`&SeaStr`]: SeaStr
 //! [`CString`]: alloc::ffi::CString
+//! [`Box`]: alloc::boxed::Box
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -97,24 +100,37 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// The size and alignment of the outer structs are also checked.
 /// The two structures can they be [transmuted](TransmuteFrom::transmute_from) between one another.
 ///
+/// <div class="warning">
+/// This macro can only check the size, alignment and offsets of types.
+/// It is still up to you to ensure that usage is sound.
+/// </div>
+#[cfg(feature = "macros")]
+pub use seasick_macros::TransmuteFrom;
+
+/// Transmute between two types that have the same ABI.
+///
+/// Implemented with [`derive@TransmuteFrom`].
+///
+/// # Safety
+/// - User-specified.
+///
 /// # Worked Example
 ///
-/// Given this `C` file:
+/// ## `C` Source
 ///
 /// ```c
 #[doc = include_str!("_doc/transmute_from/header.h")]
 /// ```
 ///
-/// [`bindgen`](https://docs.rs/bindgen) can generate the following Rust code:
+/// ## [`bindgen`](https://docs.rs/bindgen) output
 ///
 /// ```
 #[doc = include_str!("_doc/transmute_from/bindgen.rs")]
 /// ```
 ///
-/// We can then write a reinterpretation of that struct:
+/// ## User code
 ///
 /// ```
-/// # #![cfg(all(feature = "macros", feature = "libc"))]
 /// # use core::{ffi::*, marker::PhantomData};
 /// # use seasick::*;
 /// # #[path = "_doc/transmute_from/bindgen.rs"] mod sys;
@@ -146,7 +162,6 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// all cause a compilation failure:
 ///
 /// ```compile_fail
-/// # #![cfg(all(feature = "macros"))]
 /// # use core::{ffi::*, marker::PhantomData};
 /// # use seasick::*;
 /// # #[path = "_doc/transmute_from/bindgen.rs"] mod sys;
@@ -196,24 +211,9 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 ///     phantom: PhantomData<()>,
 /// }
 /// ```
-///
-/// <div class="warning">
-/// This macro can only check the size, alignment and offsets of types.
-/// It is still up to you to ensure that usage is sound.
-/// </div>
-#[cfg(feature = "macros")]
-pub use seasick_macros::TransmuteFrom;
-
-/// Transmute between two types that have the same ABI.
-///
-/// Implemented with [`derive@TransmuteFrom`].
-///
-/// # Safety
-/// - Must be safe to transmute between the given types.
-/// - Blanket impls of [`TransmuteRefFrom`] and [`TransmuteMutFrom`] must be safe.
 pub unsafe trait TransmuteFrom<T: Sized>: Sized {
     /// # Safety
-    /// - Must be safe to transmute between the given objects.
+    /// - User-specified.
     unsafe fn transmute_from(src: T) -> Self;
 }
 
@@ -233,20 +233,20 @@ unsafe impl<T, U: TransmuteFrom<T>> TransmuteMutFrom<T> for U {
 /// Transmute between references of two types that have the same ABI.
 ///
 /// # Safety
-/// - Must be safe to transmute between the given types
+/// - User-specified.
 pub unsafe trait TransmuteRefFrom<T: ?Sized> {
     /// # Safety
-    /// - Must be safe to transmute between the given objects
+    /// - User-specified.
     unsafe fn transmute_ref(src: &T) -> &Self;
 }
 
 /// Transmute between mutable references of two types that have the same ABI.
 ///
 /// # Safety
-/// - Must be safe to transmute between the given types
+/// - User-specified.
 pub unsafe trait TransmuteMutFrom<T: ?Sized> {
     /// # Safety
-    /// - Must be safe to transmute between the given objects
+    /// - User-specified.
     unsafe fn transmute_mut(src: &mut T) -> &mut Self;
 }
 
@@ -263,7 +263,7 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
 #[doc = include_str!("_doc/assert_abi/header.h")]
 /// ```
 ///
-/// ## [`bindgen`](https://docs.rs/bindgen) output.
+/// ## [`bindgen`](https://docs.rs/bindgen) output
 ///
 /// ```rust
 #[doc = include_str!("_doc/assert_abi/bindgen.rs")]
@@ -272,7 +272,6 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
 /// ## User code
 ///
 /// ```
-/// # #![cfg(all(feature = "macros", feature = "libc"))]
 /// # use seasick::*;
 /// # use core::ffi::c_char;
 /// # #[path = "_doc/assert_abi/bindgen.rs"] mod sys;
@@ -287,7 +286,6 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
 /// If the abi is mismatched, you will get a compile error:
 ///
 /// ```compile_fail
-/// # #![cfg(all(feature = "macros"))]
 /// # extern crate alloc;
 /// # use seasick::*;
 /// # use core::ffi::c_char;

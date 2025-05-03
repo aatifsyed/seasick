@@ -1,7 +1,7 @@
 use core::{
     borrow::{Borrow, BorrowMut},
     cmp,
-    ffi::{c_char, CStr},
+    ffi::{CStr, c_char},
     fmt,
     hash::{Hash, Hasher},
     mem, ops, slice,
