@@ -300,7 +300,7 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
 /// ```
 #[macro_export]
 #[cfg(feature = "macros")]
-#[cfg_attr(docsrs, doc_cfg(feature = "macros"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 macro_rules! assert_abi {
     ($($tt:tt)*) => {
         $crate::__private::assert_abi! {
