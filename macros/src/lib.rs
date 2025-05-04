@@ -213,12 +213,31 @@ impl ToTokens for Cast {
 
 #[proc_macro_derive(TransmuteFrom, attributes(transmute))]
 pub fn transmute_from(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    expand_transmute_from(syn::parse_macro_input!(item as _))
+    do_transmute(syn::parse_macro_input!(item as _), TransmuteKind::From)
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
 
-fn expand_transmute_from(input: syn::DeriveInput) -> syn::Result<TokenStream> {
+#[proc_macro_derive(TransmuteRefFrom, attributes(transmute))]
+pub fn transmute_ref_from(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    do_transmute(syn::parse_macro_input!(item as _), TransmuteKind::RefFrom)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+#[proc_macro_derive(TransmuteMutFrom, attributes(transmute))]
+pub fn transmute_mut_from(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    do_transmute(syn::parse_macro_input!(item as _), TransmuteKind::MutFrom)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+enum TransmuteKind {
+    From,
+    MutFrom,
+    RefFrom,
+}
+
+fn do_transmute(input: syn::DeriveInput, kind: TransmuteKind) -> syn::Result<TokenStream> {
     let syn::DeriveInput {
         ref attrs,
         vis: _,
@@ -263,17 +282,18 @@ fn expand_transmute_from(input: syn::DeriveInput) -> syn::Result<TokenStream> {
         let bad_offset = format!("{preamble} offset");
 
         checks.extend(quote! {
-            let local = layout_of_field(|it: &#local|&it.#local_member);
-            let remote = layout_of_field(|it: &#remote| &it.#remote_member);
+            let local = #krate::__private::layout_of_field(|it: &#local|&it.#local_member);
+            let remote = #krate::__private::layout_of_field(|it: &#remote| &it.#remote_member);
 
             if local.size() != remote.size() {
-                panic!(#bad_size)
+                #krate::__private::core::panic!(#bad_size)
             }
             if local.align() != remote.align() {
-                panic!(#bad_align)
+                #krate::__private::core::panic!(#bad_align)
             }
-            if offset_of!(#local, #local_member) != offset_of!(#remote, #remote_member) {
-                panic!(#bad_offset)
+            if #krate::__private::core::mem::offset_of!(#local, #local_member)
+                != #krate::__private::core::mem::offset_of!(#remote, #remote_member) {
+                #krate::__private::core::panic!(#bad_offset)
             }
         });
 
@@ -290,63 +310,88 @@ fn expand_transmute_from(input: syn::DeriveInput) -> syn::Result<TokenStream> {
                 ));
             }
             checks.extend(quote! {
-                layout_of_field::<#remote, #remote_ty>(|it| &it.#remote_member);
+                #krate::__private::layout_of_field::<#remote, #remote_ty>(|it| &it.#remote_member);
             });
         }
 
         remote_members.push(remote_member);
     }
 
-    checks.extend(quote! {
-        fn exhaustive(#remote {
-            #(#remote_members: _,)*
-        }: #remote) {}
-    });
+    checks.extend(match kind {
+        TransmuteKind::From => {
+            let preamble = format!("`{local}` and (from) `{}`: mismatched", Fmt(&remote));
+            let bad_size = format!("{preamble} size");
+            let bad_align = format!("{preamble} alignment");
 
-    let preamble = format!("`{local}` and (from) `{}`: mismatched", Fmt(&remote));
-    let bad_size = format!("{preamble} size");
-    let bad_align = format!("{preamble} alignment");
+            quote! {
+                fn exhaustive(#remote {
+                    #(#remote_members: _,)*
+                }: #remote) {}
 
-    checks.extend(quote! {
-        let local = Layout::new::<#local>();
-        let remote = Layout::new::<#remote>();
+                let local = #krate::__private::core::alloc::Layout::new::<#local>();
+                let remote = #krate::__private::core::alloc::Layout::new::<#remote>();
 
-        if local.size() != remote.size() {
-            panic!(#bad_size)
+                if local.size() != remote.size() {
+                    #krate::__private::core::panic!(#bad_size)
+                }
+                if local.align() != remote.align() {
+                    #krate::__private::core::panic!(#bad_align)
+                }
+            }
         }
-        if local.align() != remote.align() {
-            panic!(#bad_align)
+        TransmuteKind::MutFrom | TransmuteKind::RefFrom => {
+            let bad_align = format!(
+                "`{local}` and (from) `{}`: mismatched alignment",
+                Fmt(&remote)
+            );
+            quote! {
+                let local = #krate::__private::core::alloc::Layout::new::<#local>();
+                let remote = #krate::__private::core::alloc::Layout::new::<#remote>();
+
+                if local.align() != remote.align() {
+                    #krate::__private::core::panic!(#bad_align)
+                }
+            }
         }
     });
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let impls = match kind {
+        TransmuteKind::From => quote! {
+            unsafe impl #impl_generics #krate::TransmuteFrom<#remote> for #local #ty_generics #where_clause {
+                unsafe fn transmute_from(remote: #remote) -> Self {
+                    unsafe { #krate::__private::core::mem::transmute::<#remote, #local>(remote) }
+                }
+            }
+            unsafe impl #impl_generics #krate::TransmuteFrom<#local #ty_generics> for #remote #where_clause {
+                unsafe fn transmute_from(local: #local) -> Self {
+                    unsafe { #krate::__private::core::mem::transmute::<#local, #remote>(local) }
+                }
+            }
+        },
+        TransmuteKind::MutFrom => quote! {
+            unsafe impl #impl_generics #krate::TransmuteMutFrom<#remote> for #local #ty_generics #where_clause {
+                unsafe fn transmute_mut(remote: &mut #remote) -> &mut Self {
+                    let ptr = remote as *mut #remote as *mut Self;
+                    unsafe { &mut *ptr }
+                }
+            }
+        },
+        TransmuteKind::RefFrom => quote! {
+            unsafe impl #impl_generics #krate::TransmuteRefFrom<#remote> for #local #ty_generics #where_clause {
+                unsafe fn transmute_ref(remote: &#remote) -> &Self {
+                    let ptr = remote as *const #remote as *const Self;
+                    unsafe { &*ptr }
+                }
+            }
+        },
+    };
+
     Ok(quote! {
         const _: () = {
-            use #krate::{
-                TransmuteFrom,
-                __private::{
-                    layout_of_field,
-                    core::{
-                        alloc::Layout,
-                        panic,
-                        mem::{offset_of, transmute},
-                    }
-                }
-            };
-
             #checks
-
-            unsafe impl #impl_generics TransmuteFrom<#remote> for #local #ty_generics #where_clause {
-                unsafe fn transmute_from(remote: #remote) -> Self {
-                    unsafe { transmute::<#remote, #local>(remote) }
-                }
-            }
-            unsafe impl #impl_generics TransmuteFrom<#local #ty_generics> for #remote #where_clause {
-                unsafe fn transmute_from(local: #local) -> Self {
-                    unsafe { transmute::<#local, #remote>(local) }
-                }
-            }
+            #impls
         };
     })
 }

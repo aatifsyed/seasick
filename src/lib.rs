@@ -105,7 +105,16 @@ fn display_bytes(bytes: &[u8], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// It is still up to you to ensure that usage is sound.
 /// </div>
 #[cfg(feature = "macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 pub use seasick_macros::TransmuteFrom;
+
+#[cfg(feature = "macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
+pub use seasick_macros::TransmuteMutFrom;
+
+#[cfg(feature = "macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
+pub use seasick_macros::TransmuteRefFrom;
 
 /// Transmute between two types that have the same ABI.
 ///
@@ -115,6 +124,10 @@ pub use seasick_macros::TransmuteFrom;
 /// - User-specified.
 ///
 /// # Worked Example
+///
+/// In this example, we take a structure in a C header file,
+/// run it through [`bindgen`](https://docs.rs/bindgen),
+/// and abstract over the resulting header.
 ///
 /// ## `C` Source
 ///
@@ -144,7 +157,6 @@ pub use seasick_macros::TransmuteFrom;
 ///     pub owner: &'rt SeaStr,
 ///     pub description: Option<SeaString>,
 ///     pub children: Option<till_null::Iter<'rt, SeaStr>>,
-///
 ///                                     // assert on the remote type
 ///     #[transmute(*mut sys::clothes)] // (useful for keeping definitions in sync)
 ///     pub clothes: SeaBox<sys::clothes>,
@@ -230,7 +242,7 @@ unsafe impl<T, U: TransmuteFrom<T>> TransmuteMutFrom<T> for U {
     }
 }
 
-/// Transmute between references of two types that have the same ABI.
+/// Transmute between references of two types that have compatible ABIs.
 ///
 /// # Safety
 /// - User-specified.
@@ -240,7 +252,7 @@ pub unsafe trait TransmuteRefFrom<T: ?Sized> {
     unsafe fn transmute_ref(src: &T) -> &Self;
 }
 
-/// Transmute between mutable references of two types that have the same ABI.
+/// Transmute between mutable references of two types that have compatible ABIs.
 ///
 /// # Safety
 /// - User-specified.
@@ -256,6 +268,10 @@ pub unsafe trait TransmuteMutFrom<T: ?Sized> {
 /// functions have the same [size](core::mem::size_of) and [alignment](core::mem::align_of).
 ///
 /// # Worked example
+///
+/// In this example, we take a function in a C header file,
+/// run it through [`bindgen`](https://docs.rs/bindgen),
+/// and compare its ABI with our implementation.
 ///
 /// ## `C` Source
 ///
