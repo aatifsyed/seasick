@@ -17,7 +17,7 @@ use core::{
 ///
 /// Any `nul`s that are [written](fmt::Write::write_fmt) to this are replaced with [`char::REPLACEMENT_CHARACTER`].
 /// Allocation errors are exposed in [`fmt::write`]s.
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 pub struct WriteBuffer {
     buffer: String,
