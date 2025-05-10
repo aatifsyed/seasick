@@ -25,6 +25,17 @@ impl<const N: usize> fmt::Debug for SeaArray<N> {
 }
 
 impl<const N: usize> SeaArray<N> {
+    pub const fn new(a: [c_char; N]) -> Self {
+        Self(a)
+    }
+    pub const fn new_ref(a: &[c_char; N]) -> &Self {
+        let ptr = a as *const [c_char; N] as *const Self;
+        unsafe { &*ptr }
+    }
+    pub const fn new_mut(a: &mut [c_char; N]) -> &mut Self {
+        let ptr = a as *mut [c_char; N] as *mut Self;
+        unsafe { &mut *ptr }
+    }
     /// Return up to the nul-terminator, or the entire contents.
     pub const fn bytes(&self) -> &[u8] {
         let bytes = self.all_bytes();
