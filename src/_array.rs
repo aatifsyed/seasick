@@ -4,10 +4,10 @@ use core::{
     ffi::{CStr, c_char},
     fmt,
     hash::{Hash, Hasher},
-    ops, slice,
+    ops, ptr, slice,
 };
 
-/// A fixed-sized array that may be truncated by an interior null.
+/// A fixed-sized array that MAY be truncated by an interior null.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct SeaArray<const N: usize>(pub [c_char; N]);
@@ -59,6 +59,26 @@ impl<const N: usize> SeaArray<N> {
     pub const fn all_bytes_mut(&mut self) -> &mut [u8; N] {
         let ptr = self as *mut Self as *mut [u8; N];
         unsafe { &mut *ptr }
+    }
+    /// Set the contents of the array to `src`.
+    ///
+    /// Any spare space will be zeroed.
+    ///
+    /// # Panics
+    /// - If `src` does not fit.
+    pub const fn set(&mut self, src: &[u8]) {
+        match self.all_bytes_mut().split_at_mut_checked(src.len()) {
+            Some((dst, end)) => {
+                debug_assert!(src.len() == dst.len());
+                unsafe { ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), src.len()) }
+                let mut ix = 0;
+                while ix < end.len() {
+                    end[ix] = 0;
+                    ix += 1
+                }
+            }
+            None => panic!("`src` too big to fit in SeaArray"),
+        }
     }
 }
 
@@ -130,5 +150,23 @@ mod tests {
         *prefix = *b"hello";
 
         assert_eq!(&*arr, b"hello");
+    }
+
+    #[test]
+    fn set() {
+        let mut arr = SeaArray([1; 7]);
+        arr.set(b"hello");
+        assert_eq!(&*arr, b"hello");
+        assert_eq!(arr.all_bytes(), b"hello\0\0");
+        arr.set(b"goodbye");
+        assert_eq!(&*arr, b"goodbye");
+        assert_eq!(arr.all_bytes(), b"goodbye");
+    }
+
+    #[test]
+    #[should_panic = "`src` too big to fit in SeaArray"]
+    fn set2big() {
+        let mut arr = SeaArray([0; 7]);
+        arr.set(b"goodbye!");
     }
 }
