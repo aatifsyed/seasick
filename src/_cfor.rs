@@ -24,29 +24,29 @@ use core::fmt;
 ///
 /// This allows you to operate on iterators with `init`/`done`/`next` operations
 /// typical of `C` APIs.
-pub fn cfor<T, CondF, NextF>(init: T, cond: CondF, next: NextF) -> CFor<T, CondF, NextF>
+pub fn cfor<T, CondF, StepF>(init: T, cond: CondF, step: StepF) -> CFor<T, CondF, StepF>
 where
     T: Clone,
     CondF: FnMut(&T) -> bool,
-    NextF: FnMut(&mut T),
+    StepF: FnMut(&mut T),
 {
     CFor {
         current: init,
         cond,
-        next,
+        step,
     }
 }
 
 /// [`Iterator`] returned by [`cfor`].
 #[derive(Clone)]
-pub struct CFor<T, CondF = fn(T) -> bool, NextF = fn(T) -> T> {
+pub struct CFor<T, CondF = fn(&T) -> bool, StepF = fn(&mut T)> {
     /// The current state of the iterated variable.
     pub current: T,
     cond: CondF,
-    next: NextF,
+    step: StepF,
 }
 
-impl<T: fmt::Debug, CondF, NextF> fmt::Debug for CFor<T, CondF, NextF> {
+impl<T: fmt::Debug, CondF, StepF> fmt::Debug for CFor<T, CondF, StepF> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CFor")
             .field("current", &self.current)
@@ -54,23 +54,23 @@ impl<T: fmt::Debug, CondF, NextF> fmt::Debug for CFor<T, CondF, NextF> {
     }
 }
 
-impl<T, CondF, NextF> Iterator for CFor<T, CondF, NextF>
+impl<T, CondF, StepF> Iterator for CFor<T, CondF, StepF>
 where
     T: Clone,
     CondF: FnMut(&T) -> bool,
-    NextF: FnMut(&mut T),
+    StepF: FnMut(&mut T),
 {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
         let Self {
             current,
             cond,
-            next,
+            step,
         } = self;
         match cond(current) {
             true => {
                 let yieldme = current.clone();
-                next(current);
+                step(current);
                 Some(yieldme)
             }
             false => None,
